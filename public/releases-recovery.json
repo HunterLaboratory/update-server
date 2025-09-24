@@ -1,0 +1,27 @@
+{
+  "product": "recovery",
+  "releases": [
+    {
+      "version": "2.40.7",
+      "date": "2025-09-09",
+      "title": "Recovery 2.40.7",
+      "required": false,
+      "notesUrl": "/notes/recovery-2.40.7-notes.md",
+      "highlights": ["Recovery pipeline updates"]
+    },
+    {
+      "version": "2.40.6",
+      "date": "2025-08-23",
+      "title": "Recovery 2.40.6",
+      "required": false,
+      "notesUrl": "/notes/recovery-2.40.6-notes.md"
+    },
+    {
+      "version": "2.39.0",
+      "date": "2025-07-05",
+      "title": "Recovery 2.39.0",
+      "required": false,
+      "notesUrl": "/notes/recovery-2.39.0-notes.md"
+    }
+  ]
+}

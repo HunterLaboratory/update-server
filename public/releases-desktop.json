@@ -1,0 +1,9 @@
+{
+  "product": "desktop",
+  "releases": [
+    { "version": "1.12.0", "date": "2025-09-01", "title": "Desktop 1.12.0", "required": false, "notesUrl": "/notes/desktop-1.12.0-notes.md" },
+    { "version": "1.11.2", "date": "2025-08-10", "title": "Desktop 1.11.2", "required": false, "notesUrl": "/notes/desktop-1.11.2-notes.md" },
+    { "version": "1.11.0", "date": "2025-07-15", "title": "Desktop 1.11.0", "required": false, "notesUrl": "/notes/desktop-1.11.0-notes.md" },
+    { "version": "1.10.5", "date": "2025-06-20", "title": "Desktop 1.10.5", "required": false, "notesUrl": "/notes/desktop-1.10.5-notes.md" }
+  ]
+}
