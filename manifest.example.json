@@ -1,0 +1,81 @@
+{
+  "updates": [
+    {
+      "product": "desktop",
+      "version": "2.2.0",
+      "channel": "production",
+      "releaseDate": "2025-10-01T00:00:00Z",
+      "isRequired": false,
+      "files": {
+        "windows": "EssentialsDesktop-2.2.0-Setup.exe",
+        "macos": "EssentialsDesktop-2.2.0.pkg",
+        "darwin": "EssentialsDesktop-2.2.0.pkg",
+        "linux": "EssentialsDesktop-2.2.0.AppImage"
+      },
+      "releaseNotes": "desktop-2.2.0-notes.md"
+    },
+    {
+      "product": "desktop",
+      "version": "2.3.0-preview.1",
+      "channel": "preview",
+      "releaseDate": "2025-10-05T00:00:00Z",
+      "isRequired": false,
+      "files": {
+        "windows": "EssentialsDesktop-2.3.0-preview.1-Setup.exe",
+        "macos": "EssentialsDesktop-2.3.0-preview.1.pkg",
+        "darwin": "EssentialsDesktop-2.3.0-preview.1.pkg",
+        "linux": "EssentialsDesktop-2.3.0-preview.1.AppImage"
+      },
+      "releaseNotes": "desktop-2.3.0-preview.1-notes.md"
+    },
+    {
+      "product": "instrument",
+      "model": "agera",
+      "version": "2.40.7",
+      "channel": "production",
+      "releaseDate": "2025-09-15T00:00:00Z",
+      "isRequired": false,
+      "file": "essentials-agera-update.hunterlab",
+      "releaseNotes": "instrument-agera-2.40.7-notes.md"
+    },
+    {
+      "product": "instrument",
+      "model": "agera",
+      "version": "2.41.0-preview.2",
+      "channel": "preview",
+      "releaseDate": "2025-10-03T00:00:00Z",
+      "isRequired": false,
+      "file": "essentials-agera-update-preview.hunterlab",
+      "releaseNotes": "instrument-agera-2.41.0-preview.2-notes.md"
+    },
+    {
+      "product": "instrument",
+      "model": "colorflex",
+      "version": "2.40.5",
+      "channel": "production",
+      "releaseDate": "2025-09-20T00:00:00Z",
+      "isRequired": false,
+      "file": "essentials-colorflex-update.hunterlab",
+      "releaseNotes": "instrument-colorflex-2.40.5-notes.md"
+    },
+    {
+      "product": "instrument",
+      "model": "vista",
+      "version": "2.40.6",
+      "channel": "production",
+      "releaseDate": "2025-09-18T00:00:00Z",
+      "isRequired": false,
+      "file": "essentials-vista-update.hunterlab",
+      "releaseNotes": "instrument-vista-2.40.6-notes.md"
+    },
+    {
+      "product": "recovery",
+      "version": "2.40.7",
+      "channel": "production",
+      "releaseDate": "2025-09-15T00:00:00Z",
+      "isRequired": false,
+      "file": "essentials-recovery-update.hunterlab",
+      "releaseNotes": "recovery-2.40.7-notes.md"
+    }
+  ]
+}

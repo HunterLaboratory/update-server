@@ -113,6 +113,14 @@ app.get(["/", "/health"], async (req, res) => {
       : { type: "local" },
     availableFiles,
     scenarios: ["has_update", "no_update", "forced", "error"],
+    products: {
+      desktop: { channels: ["production", "preview"] },
+      instrument: { 
+        models: ["agera", "colorflex", "vista"],
+        channels: ["production", "preview"]
+      },
+      recovery: { channels: ["production", "preview"] }
+    }
   });
 });
 
@@ -120,6 +128,9 @@ app.get(["/", "/health"], async (req, res) => {
 app.get("/api/releases", async (req, res) => {
   try {
     const product = (req.query.product || "").toString();
+    const model = req.query.model ? req.query.model.toString() : null;
+    const channel = req.query.channel ? req.query.channel.toString() : "production";
+    
     if (!product) {
       return res.status(400).json({ error: "Missing required query param: product" });
     }
@@ -129,22 +140,33 @@ app.get("/api/releases", async (req, res) => {
       return res.status(404).json({ error: "Manifest not found" });
     }
 
-    const updates = (manifest.updates || []).filter((u) => u.product === product);
+    let updates = (manifest.updates || []).filter((u) => u.product === product);
+    
+    // Filter by model for instrument products
+    if (model && product === "instrument") {
+      updates = updates.filter((u) => u.model === model);
+    }
+    
+    // Filter by channel
+    updates = updates.filter((u) => (u.channel || "production") === channel);
+    
     if (!updates.length) {
-      return res.json({ product, releases: [] });
+      return res.json({ product, model, channel, releases: [] });
     }
 
     const releases = updates
       .map((u) => ({
         version: u.version,
         date: u.releaseDate || new Date().toISOString(),
-        title: u.displayName || u.description || `${product} ${u.version}`,
+        title: `${product} ${u.version}`,
         required: !!u.isRequired,
-        notesUrl: `${getBaseUrl(req)}/api/release-notes?product=${encodeURIComponent(product)}&version=${encodeURIComponent(u.version)}`,
+        model: u.model,
+        channel: u.channel || "production",
+        notesUrl: `${getBaseUrl(req)}/api/release-notes?product=${encodeURIComponent(product)}&version=${encodeURIComponent(u.version)}${model ? `&model=${encodeURIComponent(model)}` : ""}${channel ? `&channel=${encodeURIComponent(channel)}` : ""}`,
       }))
       .sort((a, b) => b.date.localeCompare(a.date));
 
-    return res.json({ product, releases });
+    return res.json({ product, model, channel, releases });
   } catch (e) {
     console.error("Error in /api/releases:", e);
     res.status(500).json({ error: "Internal server error" });
@@ -153,19 +175,22 @@ app.get("/api/releases", async (req, res) => {
 
 // Endpoint: Desktop (new and legacy)
 app.post("/desktop-update", async (req, res) => {
-  await handleUpdateCheck(req, res, { product: "desktop" });
+  const { channel } = req.body || {};
+  await handleUpdateCheck(req, res, { product: "desktop", channel });
 });
 
 
 // Endpoint: Instrument (new and legacy)
 app.post("/instrument-update", async (req, res) => {
-  await handleUpdateCheck(req, res, { product: "instrument" });
+  const { model, channel } = req.body || {};
+  await handleUpdateCheck(req, res, { product: "instrument", model, channel });
 });
 
 
 // Endpoint: Recovery (new and legacy)
 app.post("/recovery-update", async (req, res) => {
-  await handleUpdateCheck(req, res, { product: "recovery" });
+  const { channel } = req.body || {};
+  await handleUpdateCheck(req, res, { product: "recovery", channel });
 });
 
 
@@ -174,6 +199,9 @@ app.get("/api/release-notes", async (req, res) => {
   try {
     const product = (req.query.product || "").toString();
     const version = req.query.version ? req.query.version.toString() : null;
+    const model = req.query.model ? req.query.model.toString() : null;
+    const channel = req.query.channel ? req.query.channel.toString() : "production";
+    
     if (!product) {
       return res.status(400).json({ error: "Missing required query param: product" });
     }
@@ -183,7 +211,16 @@ app.get("/api/release-notes", async (req, res) => {
       return res.status(404).json({ error: "Manifest not found" });
     }
 
-    const candidates = (manifest.updates || []).filter((u) => u.product === product);
+    let candidates = (manifest.updates || []).filter((u) => u.product === product);
+    
+    // Filter by model for instrument products
+    if (model && product === "instrument") {
+      candidates = candidates.filter((u) => u.model === model);
+    }
+    
+    // Filter by channel
+    candidates = candidates.filter((u) => (u.channel || "production") === channel);
+    
     if (!candidates.length) {
       return res.status(404).json({ error: `No release notes configured for product '${product}'` });
     }
@@ -202,6 +239,8 @@ app.get("/api/release-notes", async (req, res) => {
     return res.json({
       product,
       version: entry.version,
+      model: entry.model,
+      channel: entry.channel || "production",
       url: rn.url || null,
       content: rn.content || null,
       expiresAt,
@@ -213,9 +252,10 @@ app.get("/api/release-notes", async (req, res) => {
 });
 
 // Core update handler using manifest
-async function handleUpdateCheck(req, res, { product }) {
+async function handleUpdateCheck(req, res, { product, model, channel }) {
   const scenario = process.env.UPDATE_SCENARIO || req.query.scenario || "has_update";
   const { currentVersion, platform } = req.body || {};
+  const targetChannel = channel || "production";
 
   try {
     if (scenario === "error") {
@@ -227,7 +267,16 @@ async function handleUpdateCheck(req, res, { product }) {
       return res.status(404).json({ hasUpdate: false, currentVersion, message: "No manifest configured" });
     }
 
-    const candidates = (manifest.updates || []).filter((u) => u.product === product);
+    let candidates = (manifest.updates || []).filter((u) => u.product === product);
+    
+    // Filter by model for instrument products
+    if (model && product === "instrument") {
+      candidates = candidates.filter((u) => u.model === model);
+    }
+    
+    // Filter by channel (default to production)
+    candidates = candidates.filter((u) => (u.channel || "production") === targetChannel);
+    
     if (!candidates.length) {
       return res.json({ hasUpdate: false, currentVersion, message: "No updates configured" });
     }
@@ -252,23 +301,23 @@ async function handleUpdateCheck(req, res, { product }) {
     const downloadUrl = resolveDownloadUrl(entry, platform);
     const releaseNotes = await resolveReleaseNotes(entry);
     // Prefer server endpoint URL for release notes so clients and websites can fetch short-lived SAS
-    const notesEndpointUrl = `${getBaseUrl(req)}/api/release-notes?product=${encodeURIComponent(product)}&version=${encodeURIComponent(targetVersion)}`;
+    let notesEndpointUrl = `${getBaseUrl(req)}/api/release-notes?product=${encodeURIComponent(product)}&version=${encodeURIComponent(targetVersion)}`;
+    if (model) notesEndpointUrl += `&model=${encodeURIComponent(model)}`;
+    if (targetChannel !== "production") notesEndpointUrl += `&channel=${encodeURIComponent(targetChannel)}`;
 
-    return res.json({
-      hasUpdate: true,
-      updateInfo: {
-        version: targetVersion,
-        displayName: entry.displayName,
-        description: entry.description,
-        releaseNotes: releaseNotes?.content,
-        releaseNotesUrl: notesEndpointUrl,
-        features: entry.features,
-        isRequired,
-        downloadUrl,
-        instrumentModel: entry.instrumentModel,
-        releaseDate: entry.releaseDate,
-      },
-    });
+      return res.json({
+        hasUpdate: true,
+        updateInfo: {
+          version: targetVersion,
+          releaseNotes: releaseNotes?.content,
+          releaseNotesUrl: notesEndpointUrl,
+          isRequired,
+          downloadUrl,
+          model: entry.model,
+          channel: entry.channel || "production",
+          releaseDate: entry.releaseDate,
+        },
+      });
   } catch (error) {
     console.error("Error processing update check:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -318,56 +367,38 @@ function resolveDownloadUrl(entry, platform) {
       const blobName = map[key] || map.default || getDesktopFileName(platform, !!entry.isRequired);
       return signBlobUrl(blobName);
     }
-    if (entry.product === "instrument") return signBlobUrl(entry.file || "essentials-update.hunterlab");
+    if (entry.product === "instrument") {
+      const defaultFile = entry.model ? `essentials-${entry.model.toLowerCase()}-update.hunterlab` : "essentials-update.hunterlab";
+      return signBlobUrl(entry.file || defaultFile);
+    }
     if (entry.product === "recovery") return signBlobUrl(entry.file || "essentials-recovery-update.hunterlab");
   }
   // If no Azure storage configured, honor explicit manifest URL if provided
   if (entry.downloadUrl) return entry.downloadUrl;
   // Local fallback
   if (entry.product === "desktop") return `/downloads/${getDesktopFileName(platform, !!entry.isRequired)}`;
-  if (entry.product === "instrument") return `/downloads/${entry.file || "essentials-update.hunterlab"}`;
+  if (entry.product === "instrument") {
+    const defaultFile = entry.model ? `essentials-${entry.model.toLowerCase()}-update.hunterlab` : "essentials-update.hunterlab";
+    return `/downloads/${entry.file || defaultFile}`;
+  }
   if (entry.product === "recovery") return `/downloads/${entry.file || "essentials-recovery-update.hunterlab"}`;
 }
 
 async function resolveReleaseNotes(entry) {
-  if (entry.releaseNotes?.content) return { content: entry.releaseNotes.content };
+  // Handle simplified format where releaseNotes is just a string (blob name)
+  const blobName = typeof entry.releaseNotes === 'string' 
+    ? entry.releaseNotes 
+    : entry.releaseNotes?.blob || entry.releaseNotesBlob;
 
-  const blobName = entry.releaseNotes?.blob || entry.releaseNotesBlob;
-  const explicitUrl = entry.releaseNotes?.url || null;
-
-  // If we have a blob name and storage, prefer generating a signed URL
+  // If we have a blob name and storage, download and return inline
   if (storageAccount && blobName) {
-    const signed = signBlobUrl(blobName);
-    if (entry.releaseNotes?.inline === true) {
-      try {
-        const content = await downloadBlobText(blobName);
-        return { content, url: signed };
-      } catch (e) {
-        console.warn("Failed to inline release notes, falling back to URL:", e.message);
-        return { url: signed };
-      }
-    }
-    return { url: signed };
-  }
-
-  // If only an explicit URL is provided, try to sign it when it points to this storage account and lacks a query
-  if (explicitUrl) {
     try {
-      const u = new URL(explicitUrl);
-      const isOurAccount = storageAccount && u.hostname === `${storageAccount}.blob.core.windows.net`;
-      const hasQuery = !!u.search && u.search.length > 1;
-      if (isOurAccount && !hasQuery) {
-        // Extract blob name relative to container
-        const path = u.pathname; // e.g. /updates/instrument-notes.md
-        const expectedPrefix = `/${containerName}/`;
-        if (path.startsWith(expectedPrefix)) {
-          const blobFromUrl = path.substring(expectedPrefix.length);
-          const signed = signBlobUrl(blobFromUrl);
-          return { url: signed };
-        }
-      }
-    } catch (_) {}
-    return { url: explicitUrl };
+      const content = await downloadBlobText(blobName);
+      return { content };
+    } catch (e) {
+      console.warn("Failed to download release notes:", e.message);
+      return null;
+    }
   }
 
   return null;
@@ -427,10 +458,11 @@ app.use((req, res) => {
     error: "Endpoint not found",
     availableEndpoints: [
       "GET /health",
-      "GET /api/release-notes?product=...&version=...",
-      "POST /desktop-update",
-      "POST /instrument_update",
-      "POST /recovery-update",
+      "GET /api/releases?product=...&model=...&channel=...",
+      "GET /api/release-notes?product=...&version=...&model=...&channel=...",
+      "POST /desktop-update (body: { currentVersion, platform, channel? })",
+      "POST /instrument-update (body: { currentVersion, platform, model?, channel? })",
+      "POST /recovery-update (body: { currentVersion, platform, channel? })",
     ],
   });
 });
