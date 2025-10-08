@@ -1,0 +1,17 @@
+# Exclude downloads folder (large files stored in Azure Blob instead)
+downloads/
+
+# Development files
+.git/
+.gitignore
+*.md
+manifest.example.json
+publish_update.sh
+
+# Node modules (Azure installs them)
+node_modules/
+
+# Environment files
+.env
+.env.*
+

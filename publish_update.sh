@@ -18,8 +18,9 @@ Instrument/Recovery:
   --file <path>
 
 Optional metadata:
-  [--display-name <name>] [--description <text>] [--required] [--release-date <ISO>]
-  [--instrument-model <int>]   (instrument only)
+  [--required] [--release-date <ISO>]
+  [--model <agera|colorflex|vista>]   (instrument only)
+  [--channel <production|preview>]
 
 Azure discovery (overrides available):
   [--resource-group <name>] [--app <webapp-name>]  (reads storage settings from app)
@@ -31,10 +32,10 @@ Examples:
     --windows "/path/EssentialsDesktop-2.3.0-Setup.exe" \
     --notes "/path/desktop-2.3.0-notes.md"
 
-  # Instrument
+  # Instrument (ColorFlex)
   ./publish_update.sh --product instrument --version 2.3.0 \
-    --file "/path/essentials-update.hunterlab" \
-    --notes "/path/instrument-2.3.0-notes.md" --instrument-model 0
+    --file "/path/essentials-colorflex-update.hunterlab" \
+    --notes "/path/instrument-2.3.0-notes.md" --model colorflex
 USAGE
 }
 
@@ -52,11 +53,10 @@ WIN_PATH=""
 MAC_PATH=""
 LINUX_PATH=""
 DEFAULT_PATH=""
-DISPLAY_NAME=""
-DESCRIPTION=""
 IS_REQUIRED=false
 RELEASE_DATE=""
-INSTR_MODEL=""
+MODEL=""
+CHANNEL="production"
 RG="${RG:-hl-essentials-rg}"
 APP="${APP:-}"   # optional; if empty, we will auto-detect
 STORAGE_ACCOUNT="${AZURE_STORAGE_ACCOUNT:-}"
@@ -73,11 +73,10 @@ while [[ $# -gt 0 ]]; do
     --macos) MAC_PATH="$2"; shift 2;;
     --linux) LINUX_PATH="$2"; shift 2;;
     --default) DEFAULT_PATH="$2"; shift 2;;
-    --display-name) DISPLAY_NAME="$2"; shift 2;;
-    --description) DESCRIPTION="$2"; shift 2;;
     --required) IS_REQUIRED=true; shift 1;;
     --release-date) RELEASE_DATE="$2"; shift 2;;
-    --instrument-model) INSTR_MODEL="$2"; shift 2;;
+    --model) MODEL="$2"; shift 2;;
+    --channel) CHANNEL="$2"; shift 2;;
     --resource-group) RG="$2"; shift 2;;
     --app) APP="$2"; shift 2;;
     --storage-account) STORAGE_ACCOUNT="$2"; shift 2;;
@@ -162,39 +161,43 @@ else
 fi
 
 # Build the new entry JSON using jq
-NOW_ISO=${RELEASE_DATE:-$(date -u +%Y-%m-%d)}
+NOW_ISO=${RELEASE_DATE:-$(date -u +%Y-%m-%dT%H:%M:%S+00:00)}
 REQ_BOOL=$([[ "$IS_REQUIRED" == true ]] && echo true || echo false)
 
 if [[ "$PRODUCT" == "desktop" ]]; then
   ENTRY=$(jq -n \
     --arg product "$PRODUCT" \
     --arg version "$VERSION" \
-    --arg displayName "${DISPLAY_NAME:-Essentials Desktop $VERSION}" \
-    --arg description "${DESCRIPTION:-Desktop update}" \
+    --arg channel "$CHANNEL" \
     --argjson isRequired "$REQ_BOOL" \
     --arg releaseDate "$NOW_ISO" \
     --arg notesBlob "$NOTES_BLOB" \
     --argjson files "$FILES_JSON" \
-    '{product: $product, version: $version, displayName: $displayName, description: $description, isRequired: $isRequired, files: $files, releaseDate: $releaseDate, features: [], releaseNotes: {inline: false, blob: $notesBlob}}')
+    '{product: $product, version: $version, channel: $channel, isRequired: $isRequired, files: $files, releaseDate: $releaseDate, releaseNotes: $notesBlob}')
 else
-  # Defaults for display name/description without Bash 4 ${var^}
-  if [[ -z "$DISPLAY_NAME" ]]; then
-    if [[ "$PRODUCT" == "instrument" ]]; then DISPLAY_NAME="Instrument $VERSION"; else DISPLAY_NAME="Recovery $VERSION"; fi
+  # Build JSON with conditional model field
+  if [[ -n "$MODEL" ]]; then
+    ENTRY=$(jq -n \
+      --arg product "$PRODUCT" \
+      --arg version "$VERSION" \
+      --arg channel "$CHANNEL" \
+      --arg model "$MODEL" \
+      --arg file "$ONE_BLOB" \
+      --arg releaseDate "$NOW_ISO" \
+      --arg notesBlob "$NOTES_BLOB" \
+      --argjson isRequired "$REQ_BOOL" \
+      '{product: $product, version: $version, channel: $channel, model: $model, isRequired: $isRequired, file: $file, releaseDate: $releaseDate, releaseNotes: $notesBlob}')
+  else
+    ENTRY=$(jq -n \
+      --arg product "$PRODUCT" \
+      --arg version "$VERSION" \
+      --arg channel "$CHANNEL" \
+      --arg file "$ONE_BLOB" \
+      --arg releaseDate "$NOW_ISO" \
+      --arg notesBlob "$NOTES_BLOB" \
+      --argjson isRequired "$REQ_BOOL" \
+      '{product: $product, version: $version, channel: $channel, isRequired: $isRequired, file: $file, releaseDate: $releaseDate, releaseNotes: $notesBlob}')
   fi
-  if [[ -z "$DESCRIPTION" ]]; then
-    if [[ "$PRODUCT" == "instrument" ]]; then DESCRIPTION="Instrument update"; else DESCRIPTION="Recovery update"; fi
-  fi
-  ENTRY=$(jq -n \
-    --arg product "$PRODUCT" \
-    --arg version "$VERSION" \
-    --arg displayName "$DISPLAY_NAME" \
-    --arg description "$DESCRIPTION" \
-    --arg file "$ONE_BLOB" \
-    --arg releaseDate "$NOW_ISO" \
-    --arg notesBlob "$NOTES_BLOB" \
-    --argjson isRequired "$REQ_BOOL" \
-    --argjson instrumentModel "${INSTR_MODEL:-0}" \
-    '{product: $product, version: $version, displayName: $displayName, description: $description, isRequired: $isRequired, file: $file, instrumentModel: $instrumentModel, releaseDate: $releaseDate, features: [], releaseNotes: {inline: false, blob: $notesBlob}}')
 fi
 
 # Download current manifest (if exists)
@@ -229,11 +232,15 @@ echo "Verify endpoints:"
 echo "  curl -sS https://$HOST/health | jq"
 case "$PRODUCT" in
   desktop)
-    echo "  curl -sS -H 'Content-Type: application/json' -d '{\"currentVersion\":\"$VERSION\",\"platform\":\"windows\"}' https://$HOST/desktop-update | jq";;
+    echo "  curl -sS -H 'Content-Type: application/json' -d '{\"currentVersion\":\"$VERSION\",\"platform\":\"windows\",\"channel\":\"$CHANNEL\"}' https://$HOST/desktop-update | jq";;
   instrument)
-    echo "  curl -sS -H 'Content-Type: application/json' -d '{\"currentVersion\":\"$VERSION\",\"platform\":\"android\"}' https://$HOST/instrument-update | jq";;
+    if [[ -n "$MODEL" ]]; then
+      echo "  curl -sS -H 'Content-Type: application/json' -d '{\"currentVersion\":\"$VERSION\",\"platform\":\"android\",\"model\":\"$MODEL\",\"channel\":\"$CHANNEL\"}' https://$HOST/instrument-update | jq"
+    else
+      echo "  curl -sS -H 'Content-Type: application/json' -d '{\"currentVersion\":\"$VERSION\",\"platform\":\"android\",\"channel\":\"$CHANNEL\"}' https://$HOST/instrument-update | jq"
+    fi;;
   recovery)
-    echo "  curl -sS -H 'Content-Type: application/json' -d '{\"currentVersion\":\"$VERSION\",\"platform\":\"android\"}' https://$HOST/recovery-update | jq";;
+    echo "  curl -sS -H 'Content-Type: application/json' -d '{\"currentVersion\":\"$VERSION\",\"platform\":\"android\",\"channel\":\"$CHANNEL\"}' https://$HOST/recovery-update | jq";;
 esac
 
 
