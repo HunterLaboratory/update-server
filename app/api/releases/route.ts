@@ -13,9 +13,12 @@ export async function GET(req: Request) {
     process.env.NEXT_PUBLIC_UPDATE_BASE_URL ||
     "https://hl-essentials-update-24423.azurewebsites.net"; // fallback for local dev
 
-  const upstreamUrl = `${upstreamBase}/api/releases?product=${encodeURIComponent(
-    product
-  )}`;
+  // Forward all query parameters to upstream
+  const upstreamParams = new URLSearchParams();
+  reqUrl.searchParams.forEach((value, key) => {
+    upstreamParams.set(key, value);
+  });
+  const upstreamUrl = `${upstreamBase}/api/releases?${upstreamParams.toString()}`;
 
   const upstream = await fetch(upstreamUrl, {
     headers: { accept: "application/json" },
@@ -33,7 +36,3 @@ export async function GET(req: Request) {
     },
   });
 }
-
-
-
-

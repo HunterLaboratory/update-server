@@ -1,17 +1,5 @@
-import ReleaseList from "@/components/ReleaseList";
-import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return (
-    <main className="mx-auto p-6 pt-8 max-w-[82rem]">
-      <h1 className="text-3xl md:text-4xl font-bold mb-8">
-        Instrument Changelog
-      </h1>
-      <Suspense
-        fallback={<div className="text-sm text-muted-foreground">Loading…</div>}
-      >
-        <ReleaseList product="instrument" />
-      </Suspense>
-    </main>
-  );
+  redirect("/instrument/agera");
 }

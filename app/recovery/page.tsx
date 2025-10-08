@@ -1,5 +1,6 @@
+"use client";
+
 import ReleaseList from "@/components/ReleaseList";
-import { Suspense } from "react";
 
 export default function Page() {
   return (
@@ -7,11 +8,7 @@ export default function Page() {
       <h1 className="text-3xl md:text-4xl font-bold mb-8">
         Recovery Changelog
       </h1>
-      <Suspense
-        fallback={<div className="text-sm text-muted-foreground">Loading…</div>}
-      >
-        <ReleaseList product="recovery" />
-      </Suspense>
+      <ReleaseList product="recovery" />
     </main>
   );
 }

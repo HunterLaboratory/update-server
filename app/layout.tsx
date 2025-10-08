@@ -82,7 +82,7 @@ export default function RootLayout({
                   </Link>
                 </li>
                 <li>
-                  <Link href="/instrument" className="hover:underline">
+                  <Link href="/instrument/agera" className="hover:underline">
                     Instrument
                   </Link>
                 </li>

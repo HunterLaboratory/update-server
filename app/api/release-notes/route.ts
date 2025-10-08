@@ -1,7 +1,6 @@
 export async function GET(req: Request) {
   const reqUrl = new URL(req.url);
   const product = reqUrl.searchParams.get("product");
-  const version = reqUrl.searchParams.get("version");
   if (!product) {
     return new Response(
       JSON.stringify({ error: "Missing required query param: product" }),
@@ -14,9 +13,12 @@ export async function GET(req: Request) {
     process.env.NEXT_PUBLIC_UPDATE_BASE_URL ||
     "https://hl-essentials-update-24423.azurewebsites.net";
 
-  const qs = new URLSearchParams({ product });
-  if (version) qs.set("version", version);
-  const upstreamUrl = `${upstreamBase}/api/release-notes?${qs.toString()}`;
+  // Forward all query parameters to upstream
+  const upstreamParams = new URLSearchParams();
+  reqUrl.searchParams.forEach((value, key) => {
+    upstreamParams.set(key, value);
+  });
+  const upstreamUrl = `${upstreamBase}/api/release-notes?${upstreamParams.toString()}`;
 
   let upstream: Response;
   try {
@@ -25,10 +27,10 @@ export async function GET(req: Request) {
       cache: "no-store",
     });
   } catch (e) {
-    return new Response(
-      JSON.stringify({ error: "Upstream fetch failed" }),
-      { status: 502, headers: { "content-type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "Upstream fetch failed" }), {
+      status: 502,
+      headers: { "content-type": "application/json" },
+    });
   }
 
   // Prefer returning inline content to avoid client-side SAS/CORS issues
@@ -48,7 +50,9 @@ export async function GET(req: Request) {
 
   if (!json?.content && json?.url) {
     try {
-      const blobRes = await fetch(json.url, { headers: { accept: "text/plain" } });
+      const blobRes = await fetch(json.url, {
+        headers: { accept: "text/plain" },
+      });
       if (blobRes.ok) {
         json.content = await blobRes.text();
       }

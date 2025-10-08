@@ -5,8 +5,10 @@ import ReleaseList from "@/components/ReleaseList";
 export default function Page() {
   return (
     <main className="mx-auto p-6 pt-8 max-w-[82rem]">
-      <h1 className="text-3xl md:text-4xl font-bold mb-8">Desktop Changelog</h1>
-      <ReleaseList product="desktop" />
+      <h1 className="text-3xl md:text-4xl font-bold mb-8">
+        ColorFlex Changelog
+      </h1>
+      <ReleaseList product="instrument" model="colorflex" />
     </main>
   );
 }
