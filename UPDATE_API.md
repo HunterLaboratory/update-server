@@ -114,7 +114,7 @@ GET /api/releases?product=recovery
     {
       "version": "2.40.7",
       "date": "2025-09-15T00:00:00Z",
-      "title": "Agera Essentials 2.40.7",
+      "title": "instrument 2.40.7",
       "required": false,
       "model": "agera",
       "channel": "production",
@@ -147,11 +147,13 @@ GET /api/release-notes?product=desktop&channel=preview
   "version": "2.40.7",
   "model": "agera",
   "channel": "production",
-  "url": "https://...",
+  "url": null,
   "content": "# Release Notes...",
   "expiresAt": "2025-10-06T12:00:00Z"
 }
 ```
+
+Note: `expiresAt` reflects a short‑lived access window (default ~15 minutes) for any signed links/content.
 
 ## Manifest Structure
 
@@ -185,6 +187,11 @@ The manifest file (`manifest.json`) should include entries with the following fi
 - `file` (optional): Blob name for single file (instruments, recovery)
 - `files` (optional): Platform-specific file map (desktop)
 - `releaseNotes` (optional): Blob name for release notes markdown file
+
+### Uniqueness and deduplication
+
+- To support multiple instrument models for the same version, use one manifest entry per model (unique by `product + version + model`).
+- If you use the helper publishing script, it currently de‑duplicates entries by `product + version` (last write wins). Publishing another model with the same version will replace the previous one. Adjust your process or the script if you need parallel model entries per version.
 
 ## Migration Guide
 
