@@ -57,7 +57,7 @@ IS_REQUIRED=false
 RELEASE_DATE=""
 MODEL=""
 CHANNEL="production"
-RG="${RG:-hl-essentials-rg}"
+RG="${RG:-HunterLabSoftware}"
 APP="${APP:-}"   # optional; if empty, we will auto-detect
 STORAGE_ACCOUNT="${AZURE_STORAGE_ACCOUNT:-}"
 CONNECTION_STRING="${AZURE_STORAGE_CONNECTION_STRING:-}"
@@ -110,7 +110,12 @@ fi
 # Discover storage from App Service if not explicitly provided
 if [[ -z "$STORAGE_ACCOUNT" || -z "$CONNECTION_STRING" ]]; then
   if [[ -z "$APP" ]]; then
-    APP=$(az webapp list -g "$RG" --query "sort_by([?starts_with(name, 'hl-essentials-update-')], &lastModifiedTimeUtc)[-1].name" -o tsv)
+    # Prefer our standard app name; fallback to most recently modified app in the RG
+    if az webapp show -g "$RG" -n hunterlab-update-server >/dev/null 2>&1; then
+      APP="hunterlab-update-server"
+    else
+      APP=$(az webapp list -g "$RG" --query "sort_by(@, &lastModifiedTimeUtc)[-1].name" -o tsv)
+    fi
   fi
   if [[ -z "$STORAGE_ACCOUNT" ]]; then
     STORAGE_ACCOUNT=$(az webapp config appsettings list -g "$RG" -n "$APP" --query "[?name=='AZURE_STORAGE_ACCOUNT'].value | [0]" -o tsv)
@@ -118,6 +123,12 @@ if [[ -z "$STORAGE_ACCOUNT" || -z "$CONNECTION_STRING" ]]; then
   if [[ -z "$CONNECTION_STRING" ]]; then
     CONNECTION_STRING=$(az storage account show-connection-string -g "$RG" -n "$STORAGE_ACCOUNT" --query connectionString -o tsv)
   fi
+fi
+
+# Guard: ensure we actually resolved storage
+if [[ -z "$STORAGE_ACCOUNT" || -z "$CONNECTION_STRING" ]]; then
+  echo "Error: Could not resolve storage from app '$APP' in RG '$RG'. Pass --storage-account/--connection-string explicitly or verify the app settings."
+  exit 1
 fi
 
 echo "Using storage: $STORAGE_ACCOUNT container=$CONTAINER"
@@ -207,12 +218,16 @@ az storage blob download --connection-string "$CONNECTION_STRING" -c "$CONTAINER
 DL_RC=$?
 set -e
 
+# If missing or empty, seed a valid empty manifest
+if [[ $DL_RC -ne 0 || ! -s "$TMP_CURRENT" ]]; then
+  echo '{"updates":[]}' > "$TMP_CURRENT"
+fi
+
 # Replace/merge with robust normalization in one step
 TMP_NEW=$(mktemp)
-jq --argjson entry "$ENTRY" --arg product "$PRODUCT" '
+jq --argjson entry "$ENTRY" '
   def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end;
-  (input? // {updates: []}) as $fallback
-  | (try (toObj) catch $fallback)
+  toObj
   | .updates = (
       ((.updates // []) + [$entry])
       | unique_by(.product + ":" + .version)
@@ -220,12 +235,16 @@ jq --argjson entry "$ENTRY" --arg product "$PRODUCT" '
 ' "$TMP_CURRENT" > "$TMP_NEW"
 
 echo "Uploading updated manifest.json"
-az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$TMP_NEW" -n manifest.json --overwrite >/dev/null
+az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$TMP_NEW" -n manifest.json --overwrite --content-type application/json >/dev/null
 
 echo "Done. Published $PRODUCT $VERSION"
 
 if [[ -z "${APP:-}" ]]; then
-  APP=$(az webapp list -g "$RG" --query "sort_by([?starts_with(name, 'hl-essentials-update-')], &lastModifiedTimeUtc)[-1].name" -o tsv)
+  if az webapp show -g "$RG" -n hunterlab-update-server >/dev/null 2>&1; then
+    APP="hunterlab-update-server"
+  else
+    APP=$(az webapp list -g "$RG" --query "sort_by(@, &lastModifiedTimeUtc)[-1].name" -o tsv)
+  fi
 fi
 HOST=$(az webapp show -g "$RG" -n "$APP" --query defaultHostName -o tsv)
 echo "Verify endpoints:" 

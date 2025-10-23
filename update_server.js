@@ -6,6 +6,7 @@ const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, S
 
 const app = express();
 const port = process.env.PORT || 3000;
+const isProduction = (process.env.NODE_ENV || "development").toLowerCase() === "production";
 
 // Azure config
 const storageAccount = process.env.AZURE_STORAGE_ACCOUNT;
@@ -72,36 +73,41 @@ function signBlobUrl(blobName) {
 app.use(cors());
 app.use(express.json());
 
-// Local static fallback for downloads
-app.use("/downloads", express.static(path.join(__dirname, "downloads")));
+// Local static fallback for downloads (development only)
+if (!isProduction) {
+  app.use("/downloads", express.static(path.join(__dirname, "downloads")));
+}
 
 // Health endpoint
 app.get(["/", "/health"], async (req, res) => {
   const downloadsDir = path.join(__dirname, "downloads");
   let availableFiles = [];
 
-  try {
-    if (fs.existsSync(downloadsDir)) {
-      availableFiles = fs
-        .readdirSync(downloadsDir)
-        .filter((file) =>
-          [".hunterlab", ".exe", ".pkg", ".dmg", ".appimage", ".apk"].some(
-            (ext) => file.toLowerCase().endsWith(ext)
+  // Only enumerate local sample files in non-production environments
+  if (!isProduction) {
+    try {
+      if (fs.existsSync(downloadsDir)) {
+        availableFiles = fs
+          .readdirSync(downloadsDir)
+          .filter((file) =>
+            [".hunterlab", ".exe", ".pkg", ".dmg", ".appimage", ".apk"].some(
+              (ext) => file.toLowerCase().endsWith(ext)
+            )
           )
-        )
-        .map((file) => {
-          const filePath = path.join(downloadsDir, file);
-          const stats = fs.statSync(filePath);
-          return {
-            name: file,
-            size: stats.size,
-            modified: stats.mtime,
-            url: `${getBaseUrl(req)}/downloads/${file}`,
-          };
-        });
+          .map((file) => {
+            const filePath = path.join(downloadsDir, file);
+            const stats = fs.statSync(filePath);
+            return {
+              name: file,
+              size: stats.size,
+              modified: stats.mtime,
+              url: `${getBaseUrl(req)}/downloads/${file}`,
+            };
+          });
+      }
+    } catch (err) {
+      console.error("Error reading downloads directory:", err);
     }
-  } catch (err) {
-    console.error("Error reading downloads directory:", err);
   }
 
   res.json({
