@@ -191,7 +191,7 @@ The manifest file (`manifest.json`) should include entries with the following fi
 ### Uniqueness and deduplication
 
 - To support multiple instrument models for the same version, use one manifest entry per model (unique by `product + version + model`).
-- If you use the helper publishing script, it currently de‑duplicates entries by `product + version` (last write wins). Publishing another model with the same version will replace the previous one. Adjust your process or the script if you need parallel model entries per version.
+- The helper publishing script de‑duplicates entries by `product + model + version` (last write wins within the same triple only). Publishing another model with the same version will not replace other models.
 
 ## Migration Guide
 

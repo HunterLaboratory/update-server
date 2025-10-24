@@ -230,7 +230,7 @@ jq --argjson entry "$ENTRY" '
   toObj
   | .updates = (
       ((.updates // []) + [$entry])
-      | unique_by(.product + ":" + .version)
+      | unique_by(.product + ":" + (.model // "") + ":" + .version)
     )
 ' "$TMP_CURRENT" > "$TMP_NEW"
 

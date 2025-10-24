@@ -63,28 +63,8 @@ Examples:
 What it does:
 - Ensures container exists
 - Uploads release notes and file(s)
-- Dedupes by `product:version` and updates `manifest.json`
+- Dedupes by `product:model:version` and updates `manifest.json`
 - Uploads `manifest.json`
 
 Verify endpoints:
-```bash
-HOST=$(az webapp show -g HunterLabSoftware -n hunterlab-update-server --query defaultHostName -o tsv)
-# Health
-curl -sS https://$HOST/health | jq
-# Instrument update
-curl -sS -H 'Content-Type: application/json' \
-  -d '{"currentVersion":"2.37.0","platform":"android","model":"colorflex","channel":"production"}' \
-  https://$HOST/instrument-update | jq
 ```
-
-## API reference
-See `UPDATE_API.md` for request/response examples and manifest schema.
-
-## Local development
-```bash
-npm install
-npm run dev
-# or
-node update_server.js
-```
-The server uses environment variables in Azure; locally it can read storage via `AZURE_STORAGE_CONNECTION_STRING` if provided.

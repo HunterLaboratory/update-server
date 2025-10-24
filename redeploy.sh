@@ -32,5 +32,3 @@ az webapp restart -g "$RG" -n "$APP"
 
 HOST=$(az webapp show -g "$RG" -n "$APP" --query defaultHostName -o tsv)
 echo "Deployed. Health: https://$HOST/health"
-
-
