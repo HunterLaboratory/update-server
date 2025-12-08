@@ -126,6 +126,10 @@ app.get(["/", "/health"], async (req, res) => {
         channels: ["production", "preview"]
       },
       recovery: { channels: ["production", "preview"] }
+    },
+    manifestSchema: {
+      note: "Use 'version' for comparison (numeric only), 'displayVersion' for UI display",
+      example: { version: "2025.3.9", displayVersion: "2025.3.0-rc9" }
     }
   });
 });
@@ -162,9 +166,9 @@ app.get("/api/releases", async (req, res) => {
 
     const releases = updates
       .map((u) => ({
-        version: u.version,
+        version: u.displayVersion || u.version,
         date: u.releaseDate || new Date().toISOString(),
-        title: `${product} ${u.version}`,
+        title: `${product} ${u.displayVersion || u.version}`,
         required: !!u.isRequired,
         model: u.model,
         channel: u.channel || "production",
@@ -244,7 +248,7 @@ app.get("/api/release-notes", async (req, res) => {
     const expiresAt = new Date(now.valueOf() + perRequestSasTtlSec * 1000).toISOString();
     return res.json({
       product,
-      version: entry.version,
+      version: entry.displayVersion || entry.version,
       model: entry.model,
       channel: entry.channel || "production",
       url: rn.url || null,
@@ -314,7 +318,7 @@ async function handleUpdateCheck(req, res, { product, model, channel }) {
       return res.json({
         hasUpdate: true,
         updateInfo: {
-          version: targetVersion,
+          version: entry.displayVersion || targetVersion,
           releaseNotes: releaseNotes?.content,
           releaseNotesUrl: notesEndpointUrl,
           isRequired,

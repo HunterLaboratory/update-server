@@ -8,7 +8,7 @@ Publish an update by uploading files to Azure Blob Storage and updating manifest
 
 Required:
   --product <desktop|instrument|recovery>
-  --version <x.y.z>
+  --version <x.y.z>               (semver for comparison, e.g. "2.22.3")
   --notes <path-to-release-notes>
 
 Desktop (provide one or more):
@@ -18,6 +18,7 @@ Instrument/Recovery:
   --file <path>
 
 Optional metadata:
+  [--display-version <string>]    (shown to users, e.g. "2025.3.rc9")
   [--required] [--release-date <ISO>]
   [--model <agera|colorflex|vista>]   (instrument only)
   [--channel <production|preview>]
@@ -32,8 +33,9 @@ Examples:
     --windows "/path/EssentialsDesktop-2.3.0-Setup.exe" \
     --notes "/path/desktop-2.3.0-notes.md"
 
-  # Instrument (ColorFlex)
+  # Instrument (ColorFlex) with display version for RC build
   ./publish_update.sh --product instrument --version 2.3.0 \
+    --display-version "2025.3.rc9" \
     --file "/path/essentials-colorflex-update.hunterlab" \
     --notes "/path/instrument-2.3.0-notes.md" --model colorflex
 USAGE
@@ -47,6 +49,7 @@ require_cmd jq
 # Defaults
 PRODUCT=""
 VERSION=""
+DISPLAY_VERSION=""
 NOTES_PATH=""
 FILE_SINGLE=""
 WIN_PATH=""
@@ -67,6 +70,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --product) PRODUCT="$2"; shift 2;;
     --version) VERSION="$2"; shift 2;;
+    --display-version) DISPLAY_VERSION="$2"; shift 2;;
     --notes) NOTES_PATH="$2"; shift 2;;
     --file) FILE_SINGLE="$2"; shift 2;;
     --windows) WIN_PATH="$2"; shift 2;;
@@ -179,35 +183,41 @@ if [[ "$PRODUCT" == "desktop" ]]; then
   ENTRY=$(jq -n \
     --arg product "$PRODUCT" \
     --arg version "$VERSION" \
+    --arg displayVersion "$DISPLAY_VERSION" \
     --arg channel "$CHANNEL" \
     --argjson isRequired "$REQ_BOOL" \
     --arg releaseDate "$NOW_ISO" \
     --arg notesBlob "$NOTES_BLOB" \
     --argjson files "$FILES_JSON" \
-    '{product: $product, version: $version, channel: $channel, isRequired: $isRequired, files: $files, releaseDate: $releaseDate, releaseNotes: $notesBlob}')
+    '{product: $product, version: $version, channel: $channel, isRequired: $isRequired, files: $files, releaseDate: $releaseDate, releaseNotes: $notesBlob}
+     | if $displayVersion != "" then . + {displayVersion: $displayVersion} else . end')
 else
   # Build JSON with conditional model field
   if [[ -n "$MODEL" ]]; then
     ENTRY=$(jq -n \
       --arg product "$PRODUCT" \
       --arg version "$VERSION" \
+      --arg displayVersion "$DISPLAY_VERSION" \
       --arg channel "$CHANNEL" \
       --arg model "$MODEL" \
       --arg file "$ONE_BLOB" \
       --arg releaseDate "$NOW_ISO" \
       --arg notesBlob "$NOTES_BLOB" \
       --argjson isRequired "$REQ_BOOL" \
-      '{product: $product, version: $version, channel: $channel, model: $model, isRequired: $isRequired, file: $file, releaseDate: $releaseDate, releaseNotes: $notesBlob}')
+      '{product: $product, version: $version, channel: $channel, model: $model, isRequired: $isRequired, file: $file, releaseDate: $releaseDate, releaseNotes: $notesBlob}
+       | if $displayVersion != "" then . + {displayVersion: $displayVersion} else . end')
   else
     ENTRY=$(jq -n \
       --arg product "$PRODUCT" \
       --arg version "$VERSION" \
+      --arg displayVersion "$DISPLAY_VERSION" \
       --arg channel "$CHANNEL" \
       --arg file "$ONE_BLOB" \
       --arg releaseDate "$NOW_ISO" \
       --arg notesBlob "$NOTES_BLOB" \
       --argjson isRequired "$REQ_BOOL" \
-      '{product: $product, version: $version, channel: $channel, isRequired: $isRequired, file: $file, releaseDate: $releaseDate, releaseNotes: $notesBlob}')
+      '{product: $product, version: $version, channel: $channel, isRequired: $isRequired, file: $file, releaseDate: $releaseDate, releaseNotes: $notesBlob}
+       | if $displayVersion != "" then . + {displayVersion: $displayVersion} else . end')
   fi
 fi
 
