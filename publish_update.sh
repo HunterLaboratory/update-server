@@ -6,6 +6,8 @@ usage() {
   cat <<'USAGE'
 Publish an update by uploading files to Azure Blob Storage and updating manifest.json.
 
+Delete an update by removing it from manifest.json and deleting associated blobs.
+
 Required:
   --product <desktop|instrument|recovery>
   --version <x.y.z>               (semver for comparison, e.g. "2.22.3")
@@ -22,6 +24,13 @@ Optional metadata:
   [--required] [--release-date <ISO>]
   [--model <agera|colorflex|vista>]   (instrument only)
   [--channel <production|preview>]
+
+Delete mode:
+  --delete                        (switch into delete mode)
+  (interactive selection is always used)
+  [--version <x.y.z>]             (optional filter)
+  [--model <agera|colorflex|vista>]   (instrument filter)
+  [--channel <production|preview>]    (optional filter; if omitted, shows all channels)
 
 Azure discovery (overrides available):
   [--resource-group <name>] [--app <webapp-name>]  (reads storage settings from app)
@@ -47,6 +56,8 @@ require_cmd az
 require_cmd jq
 
 # Defaults
+MODE="publish"   # publish|delete
+CHANNEL_SET=false
 PRODUCT=""
 VERSION=""
 DISPLAY_VERSION=""
@@ -68,6 +79,7 @@ CONTAINER="${AZURE_STORAGE_CONTAINER:-updates}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --delete) MODE="delete"; shift 1;;
     --product) PRODUCT="$2"; shift 2;;
     --version) VERSION="$2"; shift 2;;
     --display-version) DISPLAY_VERSION="$2"; shift 2;;
@@ -80,7 +92,7 @@ while [[ $# -gt 0 ]]; do
     --required) IS_REQUIRED=true; shift 1;;
     --release-date) RELEASE_DATE="$2"; shift 2;;
     --model) MODEL="$2"; shift 2;;
-    --channel) CHANNEL="$2"; shift 2;;
+    --channel) CHANNEL_SET=true; CHANNEL="$2"; shift 2;;
     --resource-group) RG="$2"; shift 2;;
     --app) APP="$2"; shift 2;;
     --storage-account) STORAGE_ACCOUNT="$2"; shift 2;;
@@ -91,8 +103,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$PRODUCT" || -z "$VERSION" || -z "$NOTES_PATH" ]]; then
-  echo "Missing required arguments"; usage; exit 1;
+if [[ "$MODE" == "delete" ]]; then
+  # If channel flag is not provided, show all channels in the picker
+  if [[ "$CHANNEL_SET" == false ]]; then
+    CHANNEL=""
+  fi
 fi
 
 case "$PRODUCT" in
@@ -101,15 +116,159 @@ case "$PRODUCT" in
   *) echo "Invalid --product: $PRODUCT"; exit 1;;
 esac
 
-if [[ "$PRODUCT" == "desktop" ]]; then
-  if [[ -z "$WIN_PATH$MAC_PATH$LINUX_PATH$DEFAULT_PATH" ]]; then
-    echo "For desktop, provide at least one of --windows/--macos/--linux/--default"; exit 1
+confirm() {
+  local prompt="$1"
+  read -r -p "$prompt [y/N] " ans
+  [[ "$ans" == "y" || "$ans" == "Y" ]]
+}
+
+download_manifest() {
+  local out="$1"
+  set +e
+  az storage blob download --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -n manifest.json -f "$out" --no-progress >/dev/null 2>&1
+  local rc=$?
+  set -e
+  if [[ $rc -ne 0 || ! -s "$out" ]]; then
+    echo '{"updates":[]}' > "$out"
   fi
-else
-  if [[ -z "$FILE_SINGLE" ]]; then
-    echo "For $PRODUCT, --file is required"; exit 1
+}
+
+blob_delete_if_exists() {
+  local blob="$1"
+  if [[ -z "$blob" ]]; then
+    return 0
   fi
-fi
+  az storage blob delete --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -n "$blob" >/dev/null 2>&1 || true
+}
+
+delete_release() {
+  local tmp_current tmp_new ids count chosen_id sel
+  tmp_current=$(mktemp)
+  tmp_new=$(mktemp)
+
+  download_manifest "$tmp_current"
+
+  # Normalize shape and filter candidates
+  ids=$(jq -r \
+    --arg product "$PRODUCT" \
+    --arg version "$VERSION" \
+    --arg channel "$CHANNEL" \
+    --arg model "$MODEL" '
+    def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end;
+    toObj
+    | (.updates // [])
+    | map(select(.product==$product))
+    | (if $channel != "" then map(select((.channel // "production")==$channel)) else . end)
+    | (if $model != "" then map(select((.model // "")==$model)) else . end)
+    | (if $version != "" then map(select(.version==$version)) else . end)
+    | to_entries
+    | map(.key|tostring)
+    | .[]
+  ' "$tmp_current")
+
+  count=$(printf "%s\n" "$ids" | awk 'NF{c++} END{print c+0}')
+
+  echo "Available matching releases:"
+  jq -r \
+    --arg product "$PRODUCT" \
+    --arg version "$VERSION" \
+    --arg channel "$CHANNEL" \
+    --arg model "$MODEL" '
+    def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end;
+    toObj
+    | (.updates // [])
+    | map(select(.product==$product))
+    | (if $channel != "" then map(select((.channel // "production")==$channel)) else . end)
+    | (if $model != "" then map(select((.model // "")==$model)) else . end)
+    | (if $version != "" then map(select(.version==$version)) else . end)
+    | to_entries
+    | .[]
+    | "\(.key)\t\(.value.product)\t\(.value.version)\t\(.value.channel // "production")\t\(.value.model // "")\t\(.value.displayVersion // "")"
+  ' "$tmp_current" | awk 'BEGIN{FS="\t"} {printf "%3d) version=%s channel=%s model=%s display=%s (id=%s)\n", NR, $3, $4, $5, $6, $1}'
+
+  if [[ "$count" -eq 0 ]]; then
+    echo "No matching releases found."
+    return 0
+  fi
+
+  read -r -p "Choose a number to delete (or blank to cancel): " sel
+  if [[ -z "$sel" ]]; then
+    echo "Cancelled."
+    return 0
+  fi
+  if ! echo "$sel" | grep -Eq '^[0-9]+$'; then
+    echo "Invalid selection."; exit 1
+  fi
+  chosen_id=$(jq -r \
+    --arg product "$PRODUCT" \
+    --arg version "$VERSION" \
+    --arg channel "$CHANNEL" \
+    --arg model "$MODEL" '
+    def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end;
+    toObj
+    | (.updates // [])
+    | map(select(.product==$product))
+    | (if $channel != "" then map(select((.channel // "production")==$channel)) else . end)
+    | (if $model != "" then map(select((.model // "")==$model)) else . end)
+    | (if $version != "" then map(select(.version==$version)) else . end)
+    | to_entries
+    | .['"$sel"' - 1].key // empty
+  ' "$tmp_current")
+  if [[ -z "$chosen_id" ]]; then
+    echo "Selection out of range."; exit 1
+  fi
+
+  # Summarize what we're about to delete (blobs)
+  local summary
+  summary=$(jq -r \
+    --argjson idx "$chosen_id" '
+      def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end;
+      toObj
+      | (.updates // [])
+      | .[$idx]
+      | "product=\(.product) version=\(.version) channel=\(.channel // "production") model=\(.model // "")\n" +
+        "notes=\(.releaseNotes // "")\n" +
+        "file=\(.file // "")\n" +
+        "files.windows=\(.files.windows // "")\n" +
+        "files.macos=\(.files.macos // "")\n" +
+        "files.linux=\(.files.linux // "")\n" +
+        "files.default=\(.files.default // "")"
+    ' "$tmp_current")
+
+  echo "$summary"
+  if ! confirm "Delete this release (manifest + blobs)?" ; then
+    echo "Cancelled."
+    return 0
+  fi
+
+  # Delete blobs referenced by entry
+  local notes one win mac lin def
+  notes=$(jq -r --argjson idx "$chosen_id" 'def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end; toObj | (.updates // []) | .[$idx].releaseNotes // empty' "$tmp_current")
+  one=$(jq -r   --argjson idx "$chosen_id" 'def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end; toObj | (.updates // []) | .[$idx].file // empty' "$tmp_current")
+  win=$(jq -r   --argjson idx "$chosen_id" 'def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end; toObj | (.updates // []) | .[$idx].files.windows // empty' "$tmp_current")
+  mac=$(jq -r   --argjson idx "$chosen_id" 'def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end; toObj | (.updates // []) | .[$idx].files.macos // empty' "$tmp_current")
+  lin=$(jq -r   --argjson idx "$chosen_id" 'def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end; toObj | (.updates // []) | .[$idx].files.linux // empty' "$tmp_current")
+  def=$(jq -r   --argjson idx "$chosen_id" 'def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end; toObj | (.updates // []) | .[$idx].files.default // empty' "$tmp_current")
+
+  blob_delete_if_exists "$notes"
+  blob_delete_if_exists "$one"
+  blob_delete_if_exists "$win"
+  blob_delete_if_exists "$mac"
+  blob_delete_if_exists "$lin"
+  blob_delete_if_exists "$def"
+
+  # Remove the entry and upload updated manifest
+  jq \
+    --argjson idx "$chosen_id" '
+      def toObj: if type=="array" then {updates:.} elif type=="object" then . else {updates: []} end;
+      toObj
+      | .updates = ((.updates // []) | to_entries | map(select(.key != $idx)) | map(.value))
+    ' "$tmp_current" > "$tmp_new"
+
+  echo "Uploading updated manifest.json"
+  az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$tmp_new" -n manifest.json --overwrite --content-type application/json >/dev/null
+  echo "Done. Deleted release."
+}
 
 # Discover storage from App Service if not explicitly provided
 if [[ -z "$STORAGE_ACCOUNT" || -z "$CONNECTION_STRING" ]]; then
@@ -139,6 +298,30 @@ echo "Using storage: $STORAGE_ACCOUNT container=$CONTAINER"
 
 # Ensure container exists
 az storage container create --connection-string "$CONNECTION_STRING" -n "$CONTAINER" >/dev/null
+
+# Mode validation after storage is resolved (so delete can still discover storage)
+if [[ "$MODE" == "delete" ]]; then
+  if [[ -z "$PRODUCT" ]]; then
+    echo "Missing required arguments for delete: --product"; usage; exit 1;
+  fi
+  # VERSION is optional in delete mode (interactive selection)
+  delete_release
+  exit 0
+fi
+
+if [[ -z "$PRODUCT" || -z "$VERSION" || -z "$NOTES_PATH" ]]; then
+  echo "Missing required arguments"; usage; exit 1;
+fi
+
+if [[ "$PRODUCT" == "desktop" ]]; then
+  if [[ -z "$WIN_PATH$MAC_PATH$LINUX_PATH$DEFAULT_PATH" ]]; then
+    echo "For desktop, provide at least one of --windows/--macos/--linux/--default"; exit 1
+  fi
+else
+  if [[ -z "$FILE_SINGLE" ]]; then
+    echo "For $PRODUCT, --file is required"; exit 1
+  fi
+fi
 
 # Determine release notes blob name
 NOTES_BASENAME=$(basename "$NOTES_PATH")

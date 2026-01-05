@@ -26,12 +26,17 @@ This uploads binaries and release notes to Azure Blob Storage and updates `manif
 Common flags (required unless noted):
 - `--product <desktop|instrument|recovery>`
 - `--version <x.y.z>`
-- `--channel <production|preview>`
+- `--channel <production|preview>` (publish mode; optional, defaults to `production`)
 - `--notes </path/to/notes.md>`
 - Desktop: `--windows </path> [--macos </path>] [--linux </path>] [--default </path>]`
 - Instrument/Recovery: `--file </path/to/file>`
 - Instrument only: `--model <agera|colorflex|vista>`
 - Optional: `--required` (marks update as mandatory) `--release-date <ISO>`
+
+Delete mode:
+- `--delete` (interactive selection; removes an entry from `manifest.json` and deletes referenced blobs)
+- Optional filters: `--version <x.y.z>`, `--model <agera|colorflex|vista>`, `--channel <production|preview>`
+  - If `--channel` is omitted in delete mode, it will list **all channels** and show the channel per entry.
 
 Examples:
 ```bash
@@ -59,6 +64,15 @@ Examples:
   --channel production \
   --file "/path/to/essentials-recovery-update.hunterlab" \
   --notes "/path/to/notes.md"
+
+# Delete (interactive picker across all channels)
+./publish_update.sh --delete --product desktop
+
+# Delete a specific version (if multiple channels match, it will prompt)
+./publish_update.sh --delete --product instrument --version 2.37.0 --model colorflex
+
+# Delete (optional channel filter)
+./publish_update.sh --delete --product desktop --version 2.3.0 --channel preview
 ```
 What it does:
 - Ensures container exists
