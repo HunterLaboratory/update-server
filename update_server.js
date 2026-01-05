@@ -358,14 +358,14 @@ function getDesktopFileName(platform, isForced) {
   const version = isForced ? "2.2.0-critical" : "2.2.0";
   switch ((platform || "").toLowerCase()) {
     case "windows":
-      return `EssentialsDesktop-${version}-Setup.exe`;
+      return `EasyMatch Quality Central-${version}-Setup.exe`;
     case "macos":
     case "darwin":
-      return `EssentialsDesktop-${version}.pkg`;
+      return `EasyMatch Quality Central-${version}.pkg`;
     case "linux":
-      return `EssentialsDesktop-${version}.AppImage`;
+      return `EasyMatch Quality Central-${version}.AppImage`;
     default:
-      return `EssentialsDesktop-${version}.zip`;
+      return `EasyMatch Quality Central-${version}.zip`;
   }
 }
 

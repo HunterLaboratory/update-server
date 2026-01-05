@@ -54,7 +54,7 @@ Examples:
   --product desktop \
   --version 2.3.0 \
   --channel production \
-  --windows "/path/to/EssentialsDesktop-2.3.0-Setup.exe" \
+  --windows "/path/to/EasyMatch Quality Central-2.3.0-Setup.exe" \
   --notes "/path/to/notes.md"
 
 # Recovery

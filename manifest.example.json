@@ -7,10 +7,10 @@
       "releaseDate": "2025-10-01T00:00:00Z",
       "isRequired": false,
       "files": {
-        "windows": "EssentialsDesktop-2.2.0-Setup.exe",
-        "macos": "EssentialsDesktop-2.2.0.pkg",
-        "darwin": "EssentialsDesktop-2.2.0.pkg",
-        "linux": "EssentialsDesktop-2.2.0.AppImage"
+        "windows": "EasyMatch Quality Central-2.2.0-Setup.exe",
+        "macos": "EasyMatch Quality Central-2.2.0.pkg",
+        "darwin": "EasyMatch Quality Central-2.2.0.pkg",
+        "linux": "EasyMatch Quality Central-2.2.0.AppImage"
       },
       "releaseNotes": "desktop-2.2.0-notes.md"
     },
@@ -21,10 +21,10 @@
       "releaseDate": "2025-10-05T00:00:00Z",
       "isRequired": false,
       "files": {
-        "windows": "EssentialsDesktop-2.3.0-preview.1-Setup.exe",
-        "macos": "EssentialsDesktop-2.3.0-preview.1.pkg",
-        "darwin": "EssentialsDesktop-2.3.0-preview.1.pkg",
-        "linux": "EssentialsDesktop-2.3.0-preview.1.AppImage"
+        "windows": "EasyMatch Quality Central-2.3.0-preview.1-Setup.exe",
+        "macos": "EasyMatch Quality Central-2.3.0-preview.1.pkg",
+        "darwin": "EasyMatch Quality Central-2.3.0-preview.1.pkg",
+        "linux": "EasyMatch Quality Central-2.3.0-preview.1.AppImage"
       },
       "releaseNotes": "desktop-2.3.0-preview.1-notes.md"
     },

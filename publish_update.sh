@@ -39,7 +39,7 @@ Azure discovery (overrides available):
 Examples:
   # Desktop (Windows only)
   ./publish_update.sh --product desktop --version 2.3.0 \
-    --windows "/path/EssentialsDesktop-2.3.0-Setup.exe" \
+    --windows "/path/EasyMatch Quality Central-2.3.0-Setup.exe" \
     --notes "/path/desktop-2.3.0-notes.md"
 
   # Instrument (ColorFlex) with display version for RC build
@@ -336,22 +336,47 @@ echo "Uploading release notes: $NOTES_BLOB"
 az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$NOTES_PATH" -n "$NOTES_BLOB" --overwrite >/dev/null
 
 # Upload update files (compatible with macOS Bash 3.x)
+ext_or_empty() {
+  local base="$1"
+  if [[ "$base" == *.* ]]; then
+    printf ".%s" "${base##*.}"
+  else
+    printf ""
+  fi
+}
+
 FILES_JSON=$(jq -n '{}')
 if [[ "$PRODUCT" == "desktop" ]]; then
   if [[ -n "$WIN_PATH" ]]; then
-    WIN_BLOB=$(basename "$WIN_PATH"); echo "Uploading: $WIN_BLOB"; az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$WIN_PATH" -n "$WIN_BLOB" --overwrite >/dev/null
+    WIN_BASE=$(basename "$WIN_PATH")
+    WIN_EXT=$(ext_or_empty "$WIN_BASE")
+    WIN_BLOB="EasyMatch Quality Central-${VERSION}-Setup${WIN_EXT}"
+    echo "Uploading: $WIN_BLOB"
+    az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$WIN_PATH" -n "$WIN_BLOB" --overwrite >/dev/null
     FILES_JSON=$(echo "$FILES_JSON" | jq --arg v "$WIN_BLOB" '. + {windows: $v}')
   fi
   if [[ -n "$MAC_PATH" ]]; then
-    MAC_BLOB=$(basename "$MAC_PATH"); echo "Uploading: $MAC_BLOB"; az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$MAC_PATH" -n "$MAC_BLOB" --overwrite >/dev/null
-    FILES_JSON=$(echo "$FILES_JSON" | jq --arg v "$MAC_BLOB" '. + {macos: $v}')
+    MAC_BASE=$(basename "$MAC_PATH")
+    MAC_EXT=$(ext_or_empty "$MAC_BASE")
+    MAC_BLOB="EasyMatch Quality Central-${VERSION}${MAC_EXT}"
+    echo "Uploading: $MAC_BLOB"
+    az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$MAC_PATH" -n "$MAC_BLOB" --overwrite >/dev/null
+    FILES_JSON=$(echo "$FILES_JSON" | jq --arg v "$MAC_BLOB" '. + {macos: $v, darwin: $v}')
   fi
   if [[ -n "$LINUX_PATH" ]]; then
-    LINUX_BLOB=$(basename "$LINUX_PATH"); echo "Uploading: $LINUX_BLOB"; az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$LINUX_PATH" -n "$LINUX_BLOB" --overwrite >/dev/null
+    LINUX_BASE=$(basename "$LINUX_PATH")
+    LINUX_EXT=$(ext_or_empty "$LINUX_BASE")
+    LINUX_BLOB="EasyMatch Quality Central-${VERSION}${LINUX_EXT}"
+    echo "Uploading: $LINUX_BLOB"
+    az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$LINUX_PATH" -n "$LINUX_BLOB" --overwrite >/dev/null
     FILES_JSON=$(echo "$FILES_JSON" | jq --arg v "$LINUX_BLOB" '. + {linux: $v}')
   fi
   if [[ -n "$DEFAULT_PATH" ]]; then
-    DEF_BLOB=$(basename "$DEFAULT_PATH"); echo "Uploading: $DEF_BLOB"; az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$DEFAULT_PATH" -n "$DEF_BLOB" --overwrite >/dev/null
+    DEF_BASE=$(basename "$DEFAULT_PATH")
+    DEF_EXT=$(ext_or_empty "$DEF_BASE")
+    DEF_BLOB="EasyMatch Quality Central-${VERSION}${DEF_EXT}"
+    echo "Uploading: $DEF_BLOB"
+    az storage blob upload --connection-string "$CONNECTION_STRING" -c "$CONTAINER" -f "$DEFAULT_PATH" -n "$DEF_BLOB" --overwrite >/dev/null
     FILES_JSON=$(echo "$FILES_JSON" | jq --arg v "$DEF_BLOB" '. + {default: $v}')
   fi
 else
