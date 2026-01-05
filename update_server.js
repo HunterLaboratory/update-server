@@ -318,7 +318,8 @@ async function handleUpdateCheck(req, res, { product, model, channel }) {
       return res.json({
         hasUpdate: true,
         updateInfo: {
-          version: entry.displayVersion || targetVersion,
+          version: targetVersion,
+          displayVersion: entry.displayVersion || targetVersion,
           releaseNotes: releaseNotes?.content,
           releaseNotesUrl: notesEndpointUrl,
           isRequired,
